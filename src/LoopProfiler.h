@@ -76,7 +76,7 @@ typedef struct {
 class LoopProfiler {
 	private:
 #ifdef PROFILE_MAP
-		std::unordered_map<const char *, LoopProfileCheckpoint> checkpoints;
+		std::map<const char *, LoopProfileCheckpoint> checkpoints;
 #else
 		LoopProfileCheckpoint checkpoints[__ACTUAL_PROFILE_CHECKPOINTS]; 
 
