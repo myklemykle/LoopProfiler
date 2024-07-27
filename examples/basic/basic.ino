@@ -20,33 +20,31 @@ void bar() {
 
 void setup() {
 	  pinMode(LED_BUILTIN, OUTPUT);
+
     Serial.begin(115200);
-    /* while (!Serial); */
-
-
-		PROFILE_SETUP(); // TODO: necessary?
+    while (!Serial);
 }
 
 void loop() { 
+	PROFILE_LOOP(); 
+
 	static elapsedMillis reportTimer = 0;
 
-	PROFILE_START_LOOP();
 
-	PROFILE_MARK_START("foo");
+	PROFILE_START("foo");
 	foo();
-	PROFILE_MARK_END("foo");
+	PROFILE_END("foo");
 
-	PROFILE_MARK_START("bar");
+	PROFILE_START("bar");
 	bar();
-	PROFILE_MARK_END("bar");
+	PROFILE_END("bar");
 
 	// report the profile results every 1000ms:
 	if (reportTimer > 1000){ // TODO: move timer into LoopProfiler ...
 		reportTimer -= 1000;
 
-		Serial.println("=====");
 		digitalWrite(LED_BUILTIN, HIGH);
-		PROFILE_PRINT_AVG();
+		PROFILE_PRINT_AVG(Serial);
 		delay(200);
 		digitalWrite(LED_BUILTIN, LOW);
 

@@ -9,36 +9,44 @@
 
 #include <string.h>
 #define strMatch(a, b) ( strcmp(a, b) == 0 )
-#define cpName(a,b) strncpy(a, b, PROFILE_POINTNAMELEN -1)
+#define cpName(a,b) strncpy(a, b, PROFILE_LABEL_LENGTH -1)
+
+
+// max length of a checkpoint label
+#ifndef PROFILE_LABEL_LENGTH
+#define PROFILE_LABEL_LENGTH 20 
+#endif
+
+// max number of checkpoints
+#ifndef PROFILE_CHECKPOINTS
+#define PROFILE_CHECKPOINTS 20  				
+#endif
+
+// max number of samples to average over
+#ifndef PROFILE_AVGOVER
+#define PROFILE_AVGOVER 100 		
+#endif
 
 
 // This object stores timing samples and a running average.
-//
-// This is statically allocated, so these two effect our mem footprint:
-#define PROFILE_POINTNAMELEN 20 // how long can the label of a checkpoint be
-#define PROFILE_CPS 20  				// max number of checkpoints
-//
-#define PROFILE_AVGOVER 100 		// max number of samples to average over
-
 typedef struct {
-	char name[PROFILE_POINTNAMELEN];
-	unsigned long sampleStart;
-	unsigned int sampleCount;
-	unsigned long sampleLen;
-	double averageLen;
+	char name[PROFILE_LABEL_LENGTH] = "";
+	unsigned long sampleStart = 0;
+	unsigned int sampleCount = 0;
+	unsigned long sampleLen = 0;
+	double averageLen = 0;
 } LoopProfileCheckpoint;
 
 class LoopProfiler {
 	private:
-		LoopProfileCheckpoint checkpoints[PROFILE_CPS]; 
-		int pointCursor, maxPoints;
-		unsigned long loopStart_us;
+		LoopProfileCheckpoint checkpoints[PROFILE_CHECKPOINTS]; 
+		int pointCursor = 0;
 
 		int findPointByName(const char *pName){
 			// Linear array search.
 			// TODO: std::unordered_map option instead? Internet thinks it would be faster after about ten items.
 			
-			for (int i = 0; i < PROFILE_CPS; i++){
+			for (int i = 0; i < PROFILE_CHECKPOINTS; i++){
 				if (strMatch(checkpoints[i].name, pName))
 					return i;
 			}
@@ -49,9 +57,10 @@ class LoopProfiler {
 
 
 	public:
-		void init(){
+
+		void reset(){
 			// zero out counters
-			for (int i = 0; i < PROFILE_CPS; i++){
+			for (int i = 0; i < PROFILE_CHECKPOINTS; i++){
 				checkpoints[i].sampleStart = 0;
 				checkpoints[i].sampleCount = 0;
 				checkpoints[i].sampleLen = 0;
@@ -64,9 +73,9 @@ class LoopProfiler {
 
 		void startLoop(){
 			if (pointCursor > 0)
-				markEnd("ALL");
+				markEnd("LOOP");
 
-			markStart("ALL");
+			markStart("LOOP");
 		};
 
 
@@ -76,15 +85,15 @@ class LoopProfiler {
 			// find by name
 			int i = findPointByName(pName);
 			if (i < 0) {
-				if (pointCursor == PROFILE_CPS) {
-					Serial.println("loopProfiler: only PROFILE_CPS checkpoints allowed");
+				if (pointCursor == PROFILE_CHECKPOINTS) {
+					Serial.println("loopProfiler: only PROFILE_CHECKPOINTS checkpoints allowed");
 					return;
 				}
 				// new point!
 				i = pointCursor;
 				cpName(checkpoints[i].name, pName);
 
-				if (pointCursor < PROFILE_CPS)
+				if (pointCursor < PROFILE_CHECKPOINTS)
 					pointCursor++;
 				// else
 					// we're run out of room;
@@ -120,24 +129,24 @@ class LoopProfiler {
 		};
 
 
-		void printRaw(){
-			Serial.print("raw: ");
+		void printRaw(Stream s){
+			s.print("raw: ");
 			for (int i=0;i<pointCursor;i++){
-				Serial.printf("%s=%d ",checkpoints[i].name, checkpoints[i].sampleLen);
+				s.printf("%s=%d ",checkpoints[i].name, checkpoints[i].sampleLen);
 			}
-			Serial.println("");
+			s.println("");
 		};
 
 
-		void printAverage(){
+		void printAverage(Stream &s){
 			LoopProfileCheckpoint *cp;
 
-			Serial.print("avg usec: ");
+			s.print("avg usec: ");
 			for (int i=0;i<pointCursor;i++){
 				cp = &(checkpoints[i]);
-				Serial.printf("%s=%.2f ",cp->name, cp->averageLen);
+				s.printf("%s=%.2f ",cp->name, cp->averageLen);
 			}
-			Serial.println();
+			s.println();
 		};
 };
 
@@ -146,12 +155,12 @@ class LoopProfiler {
 static LoopProfiler __profile; // why static?
 
 // handy macros:
-#define PROFILE_SETUP()   		__profile.init()
-#define PROFILE_START_LOOP()  __profile.startLoop()
-#define PROFILE_MARK_START(label)  __profile.markStart(label)
-#define PROFILE_MARK_END(label)  __profile.markEnd(label)
-#define PROFILE_PRINT_RAW()  __profile.printRaw()
-#define PROFILE_PRINT_AVG()  __profile.printAverage()
+#define PROFILE_RESET()   		__profile.reset()
+#define PROFILE_LOOP()  			__profile.startLoop()
+#define PROFILE_START(_label)  __profile.markStart(_label)
+#define PROFILE_END(_label)  	__profile.markEnd(_label)
+#define PROFILE_PRINT_RAW(_stream)  	__profile.printRaw(_stream)
+#define PROFILE_PRINT_AVG(_stream)  	__profile.printAverage(_stream)
 
 #else // !PROFILE 
 ////////////////////
@@ -159,11 +168,11 @@ static LoopProfiler __profile; // why static?
 ////////////////////
 
 #define PROFILE_SETUP()   
-#define PROFILE_START_LOOP()
-#define PROFILE_MARK_START(label)
-#define PROFILE_MARK_END(label)
-#define PROFILE_PRINT_RAW()  
-#define PROFILE_PRINT_AVG() 
+#define PROFILE_LOOP()
+#define PROFILE_START(_label)
+#define PROFILE_END(_label)
+#define PROFILE_PRINT_RAW(_stream)  
+#define PROFILE_PRINT_AVG(_stream) 
 
 #endif //PROFILE
 
