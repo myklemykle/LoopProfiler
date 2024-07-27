@@ -19,22 +19,10 @@
 // Measure time in microseconds instead of the default milliseconds
 //#define PROFILE_MICROS
 
-// Use the static array implementation instead of the std::unordered_map implementation,
-// for less RAM consumption but worse performance
-//#define PROFILE_NOMAP
+// Number of samples compute running averages over. Default is 100.
+#define PROFILE_AVGOVER 50
 
-// Maximum number of checkpoints we can record (not counting the main loop total). Default is 20.
-#define PROFILE_CHECKPOINTS 	4
-
-// Maximum length of a checkpoint label. Default is 20 chars. 
-#define PROFILE_LABEL_LENGTH 	10
-
-#define IAMTHEDEVELOPER
-#ifdef IAMTHEDEVELOPER
-#include "LoopProfiler.h" // while developing the library
-#else
-#include <LoopProfiler.h> // after installing the library
-#endif
+#include <LoopProfiler.h> 
 
 
 // Example function with varying execution time:
@@ -87,7 +75,9 @@ void loop() {
 		delay(200);
 		digitalWrite(LED_BUILTIN, LOW);
 
+		// Reset the statistics every ten seconds:
 		if (++resetCounter == 10){
+			Serial.println("Reset!");
 			PROFILE_RESET();
 			resetCounter = 0;
 		}
@@ -99,5 +89,4 @@ void loop() {
 	PROFILE_PRINT_MAX(Serial); 
 	PROFILE_PRINT_AVG(Serial); 
 	PROFILE_PRINT_MIN(Serial);
-	PROFILE_PRINT_RAM(Serial);
 }
