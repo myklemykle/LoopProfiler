@@ -4,19 +4,26 @@
 #include <Adafruit_TinyUSB.h>
 #endif
 
-// Define PROFILE before LoopProfiler.h is included to include profiling in the binary.
+
+///////////////////////////////
+// Configuration of LoopProfiler:
+// 
+// REQUIRED: Define PROFILE before LoopProfiler.h is included to include profiling in the binary.
+// (Undefine to leave it out completely.)
 #define PROFILE 
 
-
-// Some options (must also be defined before loopProfiler.h is included):
+// OPTIONS: (must also be defined before loopProfiler.h is included):
 // Restrict reports to once every 1000ms:
 #define PROFILE_AUTOPRINT_MS 	1000
 
 // Measure time in microseconds instead of the default milliseconds
-#define PROFILE_MICROS
+//#define PROFILE_MICROS
 
-// Maximum number of checkpoints we can record (not counting the main loop total)
-// Default is 20.
+// Use the static array implementation instead of the std::unordered_map implementation,
+// for less RAM consumption but worse performance
+//#define PROFILE_NOMAP
+
+// Maximum number of checkpoints we can record (not counting the main loop total). Default is 20.
 #define PROFILE_CHECKPOINTS 	4
 
 // Maximum length of a checkpoint label. Default is 20 chars. 
@@ -24,9 +31,9 @@
 
 #define IAMTHEDEVELOPER
 #ifdef IAMTHEDEVELOPER
-#include "LoopProfiler.h" // I do this while developing the library.
+#include "LoopProfiler.h" // while developing the library
 #else
-#include <LoopProfiler.h> // You do this after installing the library.
+#include <LoopProfiler.h> // after installing the library
 #endif
 
 
@@ -52,7 +59,8 @@ void loop() {
 	// Place this at the top of the main loop:
 	PROFILE_LOOP(); 
 
-	static elapsedMillis blinkTimer = 0;
+	static elapsedMillis timer = 0;
+	static int resetCounter = 0;
 
 	// This section encompasses both delay calls, so will average to 250ms + overhead
 	PROFILE_START("bothDelays");
@@ -72,13 +80,17 @@ void loop() {
 
 	// This section's average time (per loop) will depend on the speed of our main loop, i.e. MCU clock speed.
 	PROFILE_START("blink");
-	if (blinkTimer > 1000){ 
+	if (timer > 1000){ 
 		// Blink every second so we know the sketch is running.
-		blinkTimer -= 1000;
-
+		timer -= 1000;
 		digitalWrite(LED_BUILTIN, HIGH);
 		delay(200);
 		digitalWrite(LED_BUILTIN, LOW);
+
+		if (++resetCounter == 10){
+			PROFILE_RESET();
+			resetCounter = 0;
+		}
 	}
 	PROFILE_END("blink");
 
@@ -87,4 +99,5 @@ void loop() {
 	PROFILE_PRINT_MAX(Serial); 
 	PROFILE_PRINT_AVG(Serial); 
 	PROFILE_PRINT_MIN(Serial);
+	PROFILE_PRINT_RAM(Serial);
 }
