@@ -7,46 +7,64 @@
 ////////////////////
 
 
-#include <string.h>
-#define strMatch(a, b) ( strcmp(a, b) == 0 )
-#define cpName(a,b) strncpy(a, b, PROFILE_LABEL_LENGTH -1)
+#ifdef PROFILE_AUTOPRINT_MS
+#include <elapsedMillis.h>
+#endif
 
-
-// max length of a checkpoint label
+// Max length of a checkpoint label
 #ifndef PROFILE_LABEL_LENGTH
 #define PROFILE_LABEL_LENGTH 20 
 #endif
+#define __ACTUAL_PROFILE_LABEL_LENGTH (PROFILE_LABEL_LENGTH + 1)  // because the string is null-terminated.
 
-// max number of checkpoints
+// Max number of checkpoints
 #ifndef PROFILE_CHECKPOINTS
 #define PROFILE_CHECKPOINTS 20  				
 #endif
+#define __ACTUAL_PROFILE_CHECKPOINTS (PROFILE_CHECKPOINTS + 1) // because we also use one for timing the main loop.
 
-// max number of samples to average over
+// Max number of samples to average over
 #ifndef PROFILE_AVGOVER
 #define PROFILE_AVGOVER 100 		
 #endif
 
+// Which units-function to use for timekeeping
+#ifdef PROFILE_MICROS
+#define __loopprofilerTime micros
+#define __timeLabel "usec"
+#else
+#define __loopprofilerTime millis
+#define __timeLabel "msec"
+#endif
 
-// This object stores timing samples and a running average.
+
+// handy macros:
+#include <string.h>
+#define strMatch(a, b) ( strcmp(a, b) == 0 )
+#define cpName(a,b) strncpy(a, b, __ACTUAL_PROFILE_LABEL_LENGTH) // why -1?
+
+
+// Store timing samples and a running average
 typedef struct {
-	char name[PROFILE_LABEL_LENGTH] = "";
+	char name[__ACTUAL_PROFILE_LABEL_LENGTH] = "";
 	unsigned long sampleStart = 0;
 	unsigned int sampleCount = 0;
 	unsigned long sampleLen = 0;
 	double averageLen = 0;
+	double maxLen = 0;
+	double minLen = 0;
 } LoopProfileCheckpoint;
 
 class LoopProfiler {
 	private:
-		LoopProfileCheckpoint checkpoints[PROFILE_CHECKPOINTS]; 
-		int pointCursor = 0;
+		LoopProfileCheckpoint checkpoints[__ACTUAL_PROFILE_CHECKPOINTS]; 
+		int cpCount = 0;
 
 		int findPointByName(const char *pName){
 			// Linear array search.
 			// TODO: std::unordered_map option instead? Internet thinks it would be faster after about ten items.
 			
-			for (int i = 0; i < PROFILE_CHECKPOINTS; i++){
+			for (int i = 0; i < __ACTUAL_PROFILE_CHECKPOINTS; i++){
 				if (strMatch(checkpoints[i].name, pName))
 					return i;
 			}
@@ -57,57 +75,72 @@ class LoopProfiler {
 
 
 	public:
+#ifdef PROFILE_AUTOPRINT_MS
+		bool printNow = false;
+		elapsedMillis printTimer = 0;
+		long prevPrintTimer = 0;
+#else
+		const bool printNow = true;
+#endif
 
 		void reset(){
 			// zero out counters
-			for (int i = 0; i < PROFILE_CHECKPOINTS; i++){
+			for (int i = 0; i < __ACTUAL_PROFILE_CHECKPOINTS; i++){
 				checkpoints[i].sampleStart = 0;
 				checkpoints[i].sampleCount = 0;
 				checkpoints[i].sampleLen = 0;
 				checkpoints[i].averageLen = 0;
+				checkpoints[i].maxLen = 0;
+				checkpoints[i].minLen = 0;
 				cpName(checkpoints[i].name, "");
 			}
-			pointCursor = 0;
+			cpCount = 0;
 		};
 
 
 		void startLoop(){
-			if (pointCursor > 0)
+			if (cpCount > 0)
 				markEnd("LOOP");
 
 			markStart("LOOP");
+
+#ifdef PROFILE_AUTOPRINT_MS
+			if (printTimer > PROFILE_AUTOPRINT_MS){
+				printTimer -= PROFILE_AUTOPRINT_MS;
+				printNow = true;
+			} else {
+				printNow = false;
+			}
+#endif
 		};
 
 
 		void markStart(const char *pName){
-			unsigned long now_us = micros();
+			unsigned long now = __loopprofilerTime();
 
 			// find by name
 			int i = findPointByName(pName);
 			if (i < 0) {
-				if (pointCursor == PROFILE_CHECKPOINTS) {
-					Serial.println("loopProfiler: only PROFILE_CHECKPOINTS checkpoints allowed");
+				if (cpCount == __ACTUAL_PROFILE_CHECKPOINTS) {
+					Serial.printf("loopProfiler: skipping %s, only %d checkpoints allowed\n", pName, PROFILE_CHECKPOINTS);
 					return;
 				}
 				// new point!
-				i = pointCursor;
+				i = cpCount;
 				cpName(checkpoints[i].name, pName);
 
-				if (pointCursor < PROFILE_CHECKPOINTS)
-					pointCursor++;
-				// else
-					// we're run out of room;
-					// the next (overflowing) markStart() call will overwrite this point cuz we did not increment pointCursor
+				if (cpCount < __ACTUAL_PROFILE_CHECKPOINTS)
+					cpCount++;
 			}
 
-			LoopProfileCheckpoint *cp = &(checkpoints[i]);
+			auto *cp = &(checkpoints[i]);
 			// measure start of gap:
-			cp->sampleStart = now_us;
+			cp->sampleStart = now;
 		};
 
 
 		void markEnd(const char *pName){
-			unsigned long now_us = micros();
+			unsigned long now = __loopprofilerTime();
 
 			// find by name
 			int i = findPointByName(pName);
@@ -116,9 +149,16 @@ class LoopProfiler {
 				return;
 			}
 
-			LoopProfileCheckpoint *cp = &(checkpoints[i]);
+			auto *cp = &(checkpoints[i]);
+
 			// measure length of gap:
-			cp->sampleLen = now_us - cp->sampleStart;
+			cp->sampleLen = now - cp->sampleStart;
+
+			if (cp->sampleLen > cp->maxLen)
+				cp->maxLen = cp->sampleLen;
+
+			if ( (cp->minLen == 0) || (cp->sampleLen < cp->minLen) )
+				cp->minLen = cp->sampleLen;
 
 			// calculate avg length
 			cp->averageLen =
@@ -131,7 +171,7 @@ class LoopProfiler {
 
 		void printRaw(Stream &s){
 			s.print("raw: ");
-			for (int i=0;i<pointCursor;i++){
+			for (int i=0;i<cpCount;i++){
 				s.printf("%s=%d ",checkpoints[i].name, checkpoints[i].sampleLen);
 			}
 			s.println("");
@@ -139,12 +179,28 @@ class LoopProfiler {
 
 
 		void printAverage(Stream &s){
-			LoopProfileCheckpoint *cp;
-
-			s.print("avg usec: ");
-			for (int i=0;i<pointCursor;i++){
-				cp = &(checkpoints[i]);
+			s.print("avg " __timeLabel ": ");
+			for (int i=0;i<cpCount;i++){
+				auto cp = &(checkpoints[i]);
 				s.printf("%s=%.2f ",cp->name, cp->averageLen);
+			}
+			s.println();
+		};
+
+		void printMax(Stream &s){
+			s.print("max " __timeLabel ": ");
+			for (int i=0;i<cpCount;i++){
+				auto cp = &(checkpoints[i]);
+				s.printf("%s=%.2f ",cp->name, cp->maxLen);
+			}
+			s.println();
+		};
+
+		void printMin(Stream &s){
+			s.print("min " __timeLabel ": ");
+			for (int i=0;i<cpCount;i++){
+				auto cp = &(checkpoints[i]);
+				s.printf("%s=%.2f ",cp->name, cp->minLen);
 			}
 			s.println();
 		};
@@ -152,15 +208,17 @@ class LoopProfiler {
 
 
 // single global instance of the object:
-static LoopProfiler __profile; // why static?
+LoopProfiler __loopprofiler; 
 
 // handy macros:
-#define PROFILE_RESET()   		__profile.reset()
-#define PROFILE_LOOP()  			__profile.startLoop()
-#define PROFILE_START(_label)  __profile.markStart(_label)
-#define PROFILE_END(_label)  	__profile.markEnd(_label)
-#define PROFILE_PRINT_RAW(_stream)  	__profile.printRaw(_stream)
-#define PROFILE_PRINT_AVG(_stream)  	__profile.printAverage(_stream)
+#define PROFILE_RESET()   		__loopprofiler.reset()
+#define PROFILE_LOOP()  			__loopprofiler.startLoop()
+#define PROFILE_START(_label)  __loopprofiler.markStart(_label)
+#define PROFILE_END(_label)  	__loopprofiler.markEnd(_label)
+#define PROFILE_PRINT_RAW(_stream)  	if (__loopprofiler.printNow) __loopprofiler.printRaw(_stream)
+#define PROFILE_PRINT_AVG(_stream)  	if (__loopprofiler.printNow) __loopprofiler.printAverage(_stream)
+#define PROFILE_PRINT_MAX(_stream)  	if (__loopprofiler.printNow) __loopprofiler.printMax(_stream)
+#define PROFILE_PRINT_MIN(_stream)  	if (__loopprofiler.printNow) __loopprofiler.printMin(_stream)
 
 #else // !PROFILE 
 ////////////////////
