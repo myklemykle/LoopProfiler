@@ -129,7 +129,7 @@ class LoopProfiler {
 		};
 
 
-		void printRaw(Stream s){
+		void printRaw(Stream &s){
 			s.print("raw: ");
 			for (int i=0;i<pointCursor;i++){
 				s.printf("%s=%d ",checkpoints[i].name, checkpoints[i].sampleLen);
