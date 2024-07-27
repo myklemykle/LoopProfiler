@@ -21,9 +21,21 @@
 #ifdef PROFILE_MICROS
 #define __loopprofilerTime micros
 #define __timeLabel "usec"
+
+#else
+#ifdef PROFILE_TIMER_UINT
+#define __loopprofilerTime PROFILE_TIMER_UINT
+#ifdef PROFILE_TIMER_UNITS
+#define __timeLabel PROFILE_TIMER_UNITS
+#else
+#define __timeLabel "units"
+#endif
+
 #else
 #define __loopprofilerTime millis
 #define __timeLabel "msec"
+
+#endif
 #endif
 
 

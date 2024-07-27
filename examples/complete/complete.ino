@@ -9,21 +9,32 @@
 // Configuration of LoopProfiler:
 // 
 // REQUIRED: Define PROFILE before LoopProfiler.h is included to include profiling in the binary.
-// (Undefine to leave it out completely.)
+// Undefine to leave it out completely.
 #define PROFILE 
 
 // OPTIONS: (must also be defined before loopProfiler.h is included):
 // Restrict reports to once every 1000ms:
 #define PROFILE_AUTOPRINT_MS 	1000
 
-// Measure time in microseconds instead of the default milliseconds
-//#define PROFILE_MICROS
-
 // Number of samples compute running averages over. Default is 100.
 #define PROFILE_AVGOVER 50
 
+// Measure time in microseconds instead of the default milliseconds
+//#define PROFILE_MICROS
+
+// Measure with your own time-units function (it must return an unsigned int)
+unsigned int centis();
+#define PROFILE_TIMER_UINT centis
+// A label for your custom time-units. (Defaults to "units")
+#define PROFILE_TIMER_UNITS "cSec"
+
 #include <LoopProfiler.h> 
 
+// Example of a custom timer:
+unsigned int centis(){
+	// https://www.nist.gov/pml/owm/metric-si-prefixes
+	return micros() / 10;
+}
 
 // Example function with varying execution time:
 void delayRnd() {
@@ -34,6 +45,8 @@ void delayRnd() {
 void delay150() {
     delay(150); 						
 }
+
+
 
 void setup() {
 	pinMode(LED_BUILTIN, OUTPUT);
@@ -85,7 +98,9 @@ void loop() {
 	PROFILE_END("blink");
 
 
-	// PROFILE_PRINT_* macros print only once per PROFILE_AUTOPRINT_MS (when PROFILE_AUTOPRINT_MS is defined).
+	// When PROFILE_AUTOPRINT_MS is defined,
+	// PROFILE_PRINT_* macros report only once per PROFILE_AUTOPRINT_MS .
+	// Otherwise they report every time they are called.
 	PROFILE_PRINT_MAX(Serial); 
 	PROFILE_PRINT_AVG(Serial); 
 	PROFILE_PRINT_MIN(Serial);
