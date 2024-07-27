@@ -1,8 +1,12 @@
-#include "LoopProfiler.h"
 #include <elapsedMillis.h>
 
-// if PROFILE is not defined, all other profile code is compiled out.
-#define PROFILE
+#ifdef USE_TINYUSB
+#include <Adafruit_TinyUSB.h>
+#endif
+
+#define PROFILE 
+// if PROFILE is not defined before LoopProfiler.h is included, all profile code is removed from binary.
+#include "LoopProfiler.h"
 
 // Example function with varying execution time:
 void foo() {
@@ -15,8 +19,10 @@ void bar() {
 }
 
 void setup() {
+	  pinMode(LED_BUILTIN, OUTPUT);
     Serial.begin(115200);
-    while (!Serial);
+    /* while (!Serial); */
+
 
 		PROFILE_SETUP(); // TODO: necessary?
 }
@@ -36,7 +42,13 @@ void loop() {
 
 	// report the profile results every 1000ms:
 	if (reportTimer > 1000){ // TODO: move timer into LoopProfiler ...
-		PROFILE_PRINT_AVG();
 		reportTimer -= 1000;
+
+		Serial.println("=====");
+		digitalWrite(LED_BUILTIN, HIGH);
+		PROFILE_PRINT_AVG();
+		delay(200);
+		digitalWrite(LED_BUILTIN, LOW);
+
 	}
 }
