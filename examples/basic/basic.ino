@@ -6,7 +6,13 @@
 
 #define PROFILE 
 // if PROFILE is not defined before LoopProfiler.h is included, all profile code is removed from binary.
-#include "LoopProfiler.h"
+
+#define IAMTHEDEVELOPER
+#ifdef IAMTHEDEVELOPER
+#include "LoopProfiler.h" // I do this while developing the library
+#else
+#include <LoopProfiler.h> // You only need to this, after installing the library.
+#endif
 
 // Example function with varying execution time:
 void foo() {
